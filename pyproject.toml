@@ -1,0 +1,27 @@
+[project]
+name='kfp-analyze'
+description='Simplistic tooling for analyzing KFP preformance across different runs'
+version='0.0.0'
+authors=[
+    { name = 'Carter Fendley' }
+]
+
+dependencies = [
+    "kfp<=1.8.18",
+    "pandas",
+    "XlsxWriter",
+    "graphviz",
+    "click"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = [
+    'kfp_analyze'
+]
+
+[project.scripts]
+kfp-analyze = "kfp_analyze.cli:kfp_analyze"
