@@ -144,7 +144,7 @@ class KFPPodNode:
 
         return record
 
-    def get_output_data(self):
+    def get_output_data(self, normalize=True):
         assert self.run._client is not None, "Could not find KFP client."
         client = self.run._client
 
@@ -165,5 +165,12 @@ class KFPPodNode:
 
             t = KFP_TYPE_MAP[outputs[artifact['name']]['type']]
             data[artifact['name']] = t(datum)
+
+        # Normals names by removing template name
+        if normalize:
+            data = {
+                k.replace(f'{self.template_name}-', ''):v
+                for k, v in data.items()
+            }
 
         return data
