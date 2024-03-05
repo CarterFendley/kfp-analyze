@@ -1,9 +1,14 @@
+from __future__ import annotations
 import json
 from datetime import datetime
 from dataclasses import dataclass
 from typing import List
+from functools import cache
 
+from kfp import Client
 from graphviz import Digraph
+
+from .kfp_util import get_artifact, KFP_TYPE_MAP
 
 def get_node_color(node_type: str):
     if node_type == 'Pod':
@@ -14,6 +19,7 @@ def get_node_color(node_type: str):
 @dataclass
 class KFPRun:
     manifest: dict
+    _client: Client = None
 
     def __post_init__(self):
         self._metadata = self.manifest['metadata']
@@ -39,7 +45,7 @@ class KFPRun:
         #return datetime.fromisoformat(self.manifest['status']['finishedAt'])
         return self.manifest['status']['finishedAt']
 
-    def get_pod_nodes(self) -> List['KFPPodNode']:
+    def get_pod_nodes(self) -> List[KFPPodNode]:
         pod_nodes = []
         for node in self.manifest['status']['nodes'].values():
             if node['type'] == 'Pod':
@@ -47,7 +53,7 @@ class KFPRun:
 
         return pod_nodes
 
-    def get_node(self, id: str) -> 'KFPPodNode':
+    def get_node(self, id: str) -> KFPPodNode:
         return KFPPodNode(
             run=self,
             node=self.manifest['status']['nodes'][id]
@@ -90,6 +96,46 @@ class KFPPodNode:
     run: KFPRun
     node: dict
 
+    @property
+    def node_id(self) -> str:
+        return self.node['id']
+
+    @property
+    def template_name(self) -> str:
+        return self.node['templateName']
+
+    @property
+    def node_template(self) -> dict:
+        template = None
+        for template in self.run.manifest['spec']['templates']:
+            if template['name'] == self.template_name:
+                return template
+
+        raise RuntimeError(f"Could not find template for '{self.template_name}' in spec.")
+
+    @property
+    def component_spec(self) -> dict:
+        return json.loads(
+            self.node_template['metadata']['annotations']['pipelines.kubeflow.org/component_spec']
+        )
+
+    @property
+    def outputs(self) -> dict:
+        # NOTE: Assuming orders match here
+        outputs = self.node_template['outputs']['artifacts']
+        spec_outputs = self.component_spec["outputs"]
+
+        combined = {}
+        for o, so in zip(outputs, spec_outputs):
+            full_name = o['name']
+            combined[full_name] = {
+                'path': o['path'],
+                'short_name': so['name'],
+                'type': so['type']
+            }
+
+        return combined
+
     def to_record(self) -> dict:
         record = {
             'stage_name': self.node['displayName']
@@ -98,3 +144,26 @@ class KFPPodNode:
 
         return record
 
+    def get_output_data(self):
+        assert self.run._client is not None, "Could not find KFP client."
+        client = self.run._client
+
+        outputs = self.outputs
+        data = {}
+        for artifact in self.node['outputs']['artifacts']:
+            # Skip anything that is not a output
+            if artifact['name'] not in outputs:
+                continue
+
+            datum = get_artifact(
+                client=client,
+                run_id=self.run.run_id,
+                node_id=self.node_id,
+                artifact_name=artifact['name']
+            )
+            datum = datum['data']
+
+            t = KFP_TYPE_MAP[outputs[artifact['name']]['type']]
+            data[artifact['name']] = t(datum)
+
+        return data

@@ -1,3 +1,5 @@
+from .simple_returns import *
+
 def no_op():
     pass
 

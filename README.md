@@ -45,3 +45,13 @@ View the Kubeflow UI by port forwarding and visiting [http://localhost:8080/](ht
 ```
 kubectl port-forward -n kubeflow svc/ml-pipeline-ui 8080:80
 ```
+
+And connect with an sdk client via the follow
+
+**NOTE:** There may be sometime after startup for which this will `504`
+
+```python
+from kfp import Client
+
+client = Client(host='http://localhost:8080')
+```

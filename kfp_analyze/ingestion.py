@@ -1,6 +1,5 @@
 import json
 import logging
-
 from kfp import Client
 
 from .models import KFPRun
@@ -13,4 +12,7 @@ def pull_run_data(client: Client, run_id: str) -> KFPRun:
     if manifest['status']['phase'] not in ('Succeeded', 'Failed'):
         logging.warning("KFP Run '%s' has not finished, this will result in undefined behavior" % run_id)
 
-    return KFPRun(manifest)
+    return KFPRun(
+        manifest=manifest,
+        _client=client
+    )
